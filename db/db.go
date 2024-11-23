@@ -44,7 +44,7 @@ func open(conninfo string) (*DB, error) {
 	log.Debugf("connect string: %s", conninfo)
 	var db *sql.DB
 	var err error
-	if os.Getenv("TEST_ENV") == "true" {
+	if os.Getenv("TEST_ENV") == "true" { //for testing purpose
 		db, err = sql.Open("sqlite3", ":memory:")
 	} else {
 		db, err = sql.Open("postgres", conninfo)
