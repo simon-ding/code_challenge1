@@ -216,6 +216,6 @@ func TestServer_UserRecords(t *testing.T) {
 
 func toResponse(data []byte) Response {
 	var r Response
-	json.Unmarshal(data, &r)
+	_ = json.Unmarshal(data, &r)
 	return r
 }
