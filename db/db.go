@@ -10,6 +10,8 @@ import (
 	"strings"
 
 	_ "github.com/lib/pq"
+	_ "github.com/ncruces/go-sqlite3/driver"
+	_ "github.com/ncruces/go-sqlite3/embed"
 	"github.com/pkg/errors"
 )
 
@@ -40,7 +42,13 @@ func Open() (*DB, error) {
 
 func open(conninfo string) (*DB, error) {
 	log.Debugf("connect string: %s", conninfo)
-	db, err := sql.Open("postgres", conninfo)
+	var db *sql.DB
+	var err error
+	if os.Getenv("TEST_ENV") == "true" {
+		db, err = sql.Open("sqlite3", ":memory:")
+	} else {
+		db, err = sql.Open("postgres", conninfo)
+	}
 	if err != nil {
 		return nil, errors.Wrap(err, "open db")
 	}
@@ -115,27 +123,20 @@ func (d *DB) WithdrawOrDeposit(id int, amount *big.Rat) (*User, error) {
 	}
 
 	b := balanceToInt(b1)
+	err = d.transaction([]Statement{
+		{
+			S:    "UPDATE users SET balance=$1 WHERE id=$2",
+			Args: []interface{}{b, id},
+		},
+		{
+			S:    "INSERT INTO records (from_user, to_user, amount) VALUES ($1, $1, $2)",
+			Args: []interface{}{id, balanceToInt(amount)},
+		},
+	})
+	if err != nil {
+		return nil, errors.Wrap(err, "transaction")
+	}
 
-	tx, err := d.db.BeginTx(context.Background(), nil)
-	if err != nil {
-		return nil, errors.Wrap(err, "create tx")
-	}
-	_, err = tx.Exec("UPDATE users SET balance=$1 WHERE id=$2", b, id)
-	if err != nil {
-		_ = tx.Rollback()
-		return nil, errors.Wrap(err, "update balance")
-	}
-
-	_, err = tx.Exec("INSERT INTO records (from_user, to_user, amount) VALUES ($1, $1, $2)", id, balanceToInt(amount))
-	if err != nil {
-		_ = tx.Rollback()
-		return nil, errors.Wrap(err, "add record")
-	}
-	err = tx.Commit()
-	if err != nil {
-		_ = tx.Rollback()
-		return nil, errors.Wrap(err, "commit tx")
-	}
 	u, err = d.GetUser(id)
 	if err != nil {
 		return nil, errors.Wrap(err, "get user")
@@ -180,34 +181,51 @@ func (d *DB) Transfer(fromId, toId int, amount *big.Rat) error {
 	if err != nil {
 		return errors.Wrap(err, "get to user")
 	}
+
 	newFromUserBalance := new(big.Rat).Sub(fromUser.Balance, amount)
 	if newFromUserBalance.Sign() < 0 {
 		return errors.Errorf("user balance is not sufficient")
 	}
 	newToUserBalance := new(big.Rat).Add(toUser.Balance, amount)
 
-	ctx := context.TODO()
-	tx, err := d.db.BeginTx(ctx, nil)
-	if err != nil {
-		return err
-	}
-
-	_, err = tx.Exec("UPDATE users SET balance=$1 WHERE id=$2", balanceToInt(newFromUserBalance), fromId)
-	if err != nil {
-		_ = tx.Rollback()
-		return errors.Wrap(err, "update from user")
-	}
-	_, err = tx.Exec("UPDATE users SET balance=$1 WHERE id=$2", balanceToInt(newToUserBalance), toId)
-	if err != nil {
-		_ = tx.Rollback()
-		return errors.Wrap(err, "update to user")
-	}
-
 	b := balanceToInt(amount)
-	_, err = tx.Exec("INSERT INTO records (from_user, to_user, amount) VALUES ($1, $2, $3)", fromId, toId, b)
+
+	err = d.transaction([]Statement{
+		{
+			S:    "UPDATE users SET balance=$1 WHERE id=$2",
+			Args: []interface{}{balanceToInt(newFromUserBalance), fromId},
+		},
+		{
+			S:    "UPDATE users SET balance=$1 WHERE id=$2",
+			Args: []interface{}{balanceToInt(newToUserBalance), toId},
+		},
+		{
+			S:    "INSERT INTO records (from_user, to_user, amount) VALUES ($1, $2, $3)",
+			Args: []interface{}{fromId, toId, b},
+		},
+	})
 	if err != nil {
-		_ = tx.Rollback()
-		return errors.Wrap(err, "add record")
+		return errors.Wrap(err, "transaction")
+	}
+	return nil
+}
+
+type Statement struct {
+	S    string
+	Args []interface{}
+}
+
+func (d *DB) transaction(statements []Statement) error {
+	tx, err := d.db.BeginTx(context.Background(), nil)
+	if err != nil {
+		return errors.Wrap(err, "create tx")
+	}
+	for _, statement := range statements {
+		_, err := tx.Exec(statement.S, statement.Args...)
+		if err != nil {
+			_ = tx.Rollback()
+			return errors.Wrap(err, "exec statement")
+		}
 	}
 	err = tx.Commit()
 	if err != nil {
@@ -215,7 +233,6 @@ func (d *DB) Transfer(fromId, toId int, amount *big.Rat) error {
 		return errors.Wrap(err, "commit tx")
 	}
 	return nil
-
 }
 
 func balanceToInt(b *big.Rat) int64 {
