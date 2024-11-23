@@ -1,18 +1,24 @@
 services:
   db:
-    image: postgres
+    image: postgres:17
     restart: always
     environment:
       - POSTGRES_PASSWORD=qwe123
       - POSTGRES_USER=user1
       - POSTGRES_DB=code_challenge1
+    volumes:
+      - pg-data:/var/lib/postgresql/data
   app:
     image: ghcr.io/simon-ding/code_challenge1:main
     restart: always
     environment:
-      - DB_CONNECT_INFO="host=db port=5432 user=user1 password=qwe123 dbname=code_challenge1 sslmode=disable"
+      - DB_CONNECT_INFO=postgres://user1:qwe123@db:5432/code_challenge1?sslmode=disable
       - PUID=1000
       - PGID=1000
       - UMASK=022
     ports:
       - 8080:8080
+    depends_on:
+      - db
+volumes:
+  pg-data:
