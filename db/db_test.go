@@ -32,14 +32,14 @@ CREATE TABLE IF NOT EXISTS "records" (
 	PRIMARY KEY("id")
 );
 `
-	schema = s
+	Schema = s
 }
 
 func TestOpen(t *testing.T) {
 	setupDbTest()
 	_, err := Open()
 	assert.Nil(t, err)
-	schema = "CREATE "
+	Schema = "CREATE "
 	_, err = Open()
 	assert.NotNil(t, err)
 

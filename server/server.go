@@ -27,15 +27,18 @@ type Server struct {
 	db *db.DB
 }
 
-func (s *Server) Serve() error {
+func (s *Server) router() {
 	log.Infof("------- starting app server ---------")
 	s.r.POST("/user/add", HttpHandler(s.AddUser))
 	s.r.POST("/user/balance", HttpHandler(s.UserBalance))
 	s.r.POST("/records", HttpHandler(s.UserRecords))
 	s.r.POST("/deposit", HttpHandler(s.WithdrawOrDeposit))
 	s.r.POST("/transfer", HttpHandler(s.Transfer))
+}
 
-	return s.r.Run(":8080")
+func (s *Server) Serve(addr string) error {
+	s.router()
+	return s.r.Run(addr)
 }
 
 type AddUserIn struct {

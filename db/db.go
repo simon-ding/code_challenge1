@@ -18,7 +18,7 @@ import (
 const CurrencyDecimal = 2
 
 //go:embed schema.sql
-var schema string
+var Schema string
 
 type User struct {
 	ID      int
@@ -52,7 +52,7 @@ func open(conninfo string) (*DB, error) {
 	if err != nil {
 		return nil, errors.Wrap(err, "open db")
 	}
-	_, err = db.Exec(schema)
+	_, err = db.Exec(Schema)
 	if err != nil {
 		return nil, errors.Wrap(err, "create schema")
 	}

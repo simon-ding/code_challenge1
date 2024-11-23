@@ -11,7 +11,7 @@ func main() {
 	if err != nil {
 		panic(err)
 	}
-	if err := s.Serve(); err != nil {
+	if err := s.Serve(":8080"); err != nil {
 		log.Errorf("serve server error: %v", err)
 	}
 }
