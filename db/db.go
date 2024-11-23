@@ -171,8 +171,8 @@ func (d *DB) Transfer(fromId, toId int, amount *big.Rat) error {
 	if err != nil {
 		return errors.Wrap(err, "get to user")
 	}
-	newFromUserbalance := new(big.Rat).Sub(fromUser.Balance, amount)
-	if newFromUserbalance.Sign() < 0 {
+	newFromUserBalance := new(big.Rat).Sub(fromUser.Balance, amount)
+	if newFromUserBalance.Sign() < 0 {
 		return errors.Errorf("user balance is not sufficient")
 	}
 	newToUserBalance := new(big.Rat).Add(toUser.Balance, amount)
@@ -183,7 +183,7 @@ func (d *DB) Transfer(fromId, toId int, amount *big.Rat) error {
 		return err
 	}
 
-	_, err = tx.Exec("UPDATE users SET balance=$1 WHERE id=$2", balanceToInt(newFromUserbalance), fromId)
+	_, err = tx.Exec("UPDATE users SET balance=$1 WHERE id=$2", balanceToInt(newFromUserBalance), fromId)
 	if err != nil {
 		tx.Rollback()
 		return errors.Wrap(err, "update from user")
