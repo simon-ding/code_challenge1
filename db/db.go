@@ -64,21 +64,25 @@ func (d *DB) AddUser(name string, balance *big.Rat) (*User, error) {
 	}
 	_, err = tx.Exec("INSERT INTO users(name, balance) VALUES ($1, $2)", name, b)
 	if err != nil {
-		tx.Rollback()
-		return nil, err
+		_ = tx.Rollback()
+		return nil, errors.Wrap(err, "add user")
 	}
 	row := tx.QueryRow("SELECT * FROM users WHERE name=$1", name)
 	var u User
 	var b1 int64
 	err = row.Scan(&u.ID, &u.Name, &b1)
 	if err != nil {
-		tx.Rollback()
-		return nil, err
+		_ = tx.Rollback()
+		return nil, errors.Wrap(err, "query user")
 	}
 	u.Name = strings.TrimSpace(u.Name)
 	u.Balance = IntToBalance(b1)
 
-	tx.Commit()
+	err = tx.Commit()
+	if err != nil {
+		_ = tx.Rollback()
+		return nil, errors.Wrap(err, "commit tx")
+	}
 
 	return &u, nil
 }
