@@ -118,15 +118,20 @@ func (d *DB) WithdrawOrDeposit(id int, amount *big.Rat) (*User, error) {
 	}
 	_, err = tx.Exec("UPDATE users SET balance=$1 WHERE id=$2", b, id)
 	if err != nil {
-		tx.Rollback()
+		_ = tx.Rollback()
 		return nil, errors.Wrap(err, "update balance")
 	}
 
 	_, err = tx.Exec("INSERT INTO records (from_user, to_user, amount) VALUES ($1, $1, $2)", id, balanceToInt(amount))
 	if err != nil {
+		_ = tx.Rollback()
 		return nil, errors.Wrap(err, "add record")
 	}
-	tx.Commit()
+	err = tx.Commit()
+	if err != nil {
+		_ = tx.Rollback()
+		return nil, errors.Wrap(err, "commit tx")
+	}
 	u, err = d.GetUser(id)
 	if err != nil {
 		return nil, errors.Wrap(err, "get user")
@@ -185,22 +190,26 @@ func (d *DB) Transfer(fromId, toId int, amount *big.Rat) error {
 
 	_, err = tx.Exec("UPDATE users SET balance=$1 WHERE id=$2", balanceToInt(newFromUserBalance), fromId)
 	if err != nil {
-		tx.Rollback()
+		_ = tx.Rollback()
 		return errors.Wrap(err, "update from user")
 	}
 	_, err = tx.Exec("UPDATE users SET balance=$1 WHERE id=$2", balanceToInt(newToUserBalance), toId)
 	if err != nil {
-		tx.Rollback()
+		_ = tx.Rollback()
 		return errors.Wrap(err, "update to user")
 	}
 
 	b := balanceToInt(amount)
 	_, err = tx.Exec("INSERT INTO records (from_user, to_user, amount) VALUES ($1, $2, $3)", fromId, toId, b)
 	if err != nil {
-		tx.Rollback()
-		return err
+		_ = tx.Rollback()
+		return errors.Wrap(err, "add record")
 	}
-	tx.Commit()
+	err = tx.Commit()
+	if err != nil {
+		_ = tx.Rollback()
+		return errors.Wrap(err, "commit tx")
+	}
 	return nil
 
 }
